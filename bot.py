@@ -68,23 +68,44 @@ def has_redeemed_key(user_id):
     return str(user_id) in redemptions
 
 async def get_roblox_user_id(username: str):
-    async with aiohttp.ClientSession() as session:
-        payload = {"usernames": [username], "excludeBannedUsers": False}
-        async with session.post("https://users.roblox.com/v1/usernames/users", json=payload) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                if data and data.get("data") and len(data["data"]) > 0:
-                    return str(data["data"][0]["id"])
-            return None
+    try:
+        username = username.strip()
+        async with aiohttp.ClientSession() as session:
+            payload = {"usernames": [username], "excludeBannedUsers": False}
+            async with session.post("https://users.roblox.com/v1/usernames/users", json=payload) as resp:
+                print(f"Roblox API Status: {resp.status}")
+                text = await resp.text()
+                print(f"Roblox API Response: {text}")
+                
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data and data.get("data") and len(data["data"]) > 0:
+                        user_id = str(data["data"][0]["id"])
+                        print(f"Found user ID: {user_id}")
+                        return user_id
+                return None
+    except Exception as e:
+        print(f"Error getting Roblox user ID: {e}")
+        return None
 
 async def check_user_owns_gamepass(user_id: str, gamepass_id: int):
-    async with aiohttp.ClientSession() as session:
-        url = f"https://inventory.roblox.com/v1/users/{user_id}/items/GamePass/{gamepass_id}"
-        async with session.get(url) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                return len(data.get('data', [])) > 0
-            return False
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"https://inventory.roblox.com/v1/users/{user_id}/items/GamePass/{gamepass_id}"
+            async with session.get(url) as resp:
+                print(f"Gamepass check status: {resp.status}")
+                text = await resp.text()
+                print(f"Gamepass check response: {text}")
+                
+                if resp.status == 200:
+                    data = await resp.json()
+                    has_gamepass = len(data.get('data', [])) > 0
+                    print(f"User owns gamepass: {has_gamepass}")
+                    return has_gamepass
+                return False
+    except Exception as e:
+        print(f"Error checking gamepass: {e}")
+        return False
 
 class ValidatePurchaseView(View):
     def __init__(self, roblox_username: str):
