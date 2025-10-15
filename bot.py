@@ -8,6 +8,7 @@ from threading import Thread
 import os
 import json
 import uuid
+import aiohttp
 
 app = Flask(__name__)
 
@@ -29,6 +30,9 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 
 KEYS_FILE = "keys.json"
 REDEMPTIONS_FILE = "redemptions.json"
+
+ADMIN_IDS = [1418891812713795706]
+GAMEPASS_ID = 1462417519
 
 def load_keys():
     if not os.path.exists(KEYS_FILE):
@@ -57,12 +61,81 @@ def save_redemptions(redemptions):
         json.dump(redemptions, f, indent=4)
 
 def is_admin(user_id):
-    admin_ids = os.getenv("ADMIN_USER_IDS", "").split(",")
-    return str(user_id) in admin_ids
+    return user_id in ADMIN_IDS
 
 def has_redeemed_key(user_id):
     redemptions = load_redemptions()
     return str(user_id) in redemptions
+
+async def get_roblox_user_id(username: str):
+    async with aiohttp.ClientSession() as session:
+        payload = {"usernames": [username], "excludeBannedUsers": False}
+        async with session.post("https://users.roblox.com/v1/usernames/users", json=payload) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data and data.get("data") and len(data["data"]) > 0:
+                    return str(data["data"][0]["id"])
+            return None
+
+async def check_user_owns_gamepass(user_id: str, gamepass_id: int):
+    async with aiohttp.ClientSession() as session:
+        url = f"https://inventory.roblox.com/v1/users/{user_id}/items/GamePass/{gamepass_id}"
+        async with session.get(url) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                return len(data.get('data', [])) > 0
+            return False
+
+class ValidatePurchaseView(View):
+    def __init__(self, roblox_username: str):
+        super().__init__(timeout=180)
+        self.roblox_username = roblox_username
+    
+    @discord.ui.button(label="Validate Purchase", style=discord.ButtonStyle.success, emoji="✅")
+    async def validate_purchase(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.defer(ephemeral=True)
+        
+        user_id = await get_roblox_user_id(self.roblox_username)
+        if not user_id:
+            embed = discord.Embed(
+                title="Error",
+                description="Could not find Roblox user. Please check the username and try again.",
+                color=0xFF0000
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
+        owns_gamepass = await check_user_owns_gamepass(user_id, GAMEPASS_ID)
+        
+        if owns_gamepass:
+            try:
+                dm_embed = discord.Embed(
+                    title="Purchase Validated!",
+                    description="hi",
+                    color=0x00FF00
+                )
+                await interaction.user.send(embed=dm_embed)
+                
+                success_embed = discord.Embed(
+                    title="Success!",
+                    description="Your purchase has been validated! Check your DMs.",
+                    color=0x00FF00
+                )
+                await interaction.followup.send(embed=success_embed, ephemeral=True)
+            except discord.Forbidden:
+                error_embed = discord.Embed(
+                    title="DM Failed",
+                    description="I couldn't send you a DM. Please enable DMs from server members.",
+                    color=0xFF0000
+                )
+                await interaction.followup.send(embed=error_embed, ephemeral=True)
+        else:
+            embed = discord.Embed(
+                title="Purchase Failed",
+                description="User does not own the gamepass!",
+                color=0xFF0000
+            )
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
 class PanelView(View):
     def __init__(self):
@@ -265,13 +338,20 @@ async def redeemkey(interaction: discord.Interaction, key: str):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="buy", description="Buy an item")
-async def buy(interaction: discord.Interaction):
+@app_commands.describe(roblox_username="Your Roblox username")
+async def buy(interaction: discord.Interaction, roblox_username: str):
     embed = discord.Embed(
-        title="Purchase",
-        description="Thank you for your purchase!",
-        color=0x00FF00
+        title="Purchase Gamepass",
+        description=f"**Roblox Username:** {roblox_username}\n**Gamepass ID:** {GAMEPASS_ID}\n\nPlease purchase the gamepass first, then click the button below to validate your purchase.",
+        color=0x0099FF
     )
-    await interaction.response.send_message(embed=embed)
+    embed.add_field(name="Gamepass Link", value=f"https://www.roblox.com/game-pass/{GAMEPASS_ID}", inline=False)
+    
+    await interaction.response.send_message(
+        embed=embed, 
+        view=ValidatePurchaseView(roblox_username),
+        ephemeral=True
+    )
 
 if __name__ == "__main__":
     keep_alive()
