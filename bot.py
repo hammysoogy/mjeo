@@ -75,8 +75,8 @@ async def buy(interaction: discord.Interaction):
 
 if __name__ == "__main__":
     keep_alive()
-    TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+    TOKEN = os.getenv("DISCORD_TOKEN")
     if not TOKEN:
-        print("Error: DISCORD_BOT_TOKEN not found in environment variables")
+        print("Error: DISCORD_TOKEN not found in environment variables")
         exit(1)
     bot.run(TOKEN)
