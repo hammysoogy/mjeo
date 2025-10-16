@@ -32,9 +32,10 @@ KEYS_FILE = "keys.json"
 REDEMPTIONS_FILE = "redemptions.json"
 STOCK_FILE = "account_stock.json"
 VERIFIED_USERS_FILE = "verified_users.json"
+CLAIMED_USERS_FILE = "claimed_users.json"
+GAMEPASS_POOL_FILE = "gamepass_pool.json"
 
 ADMIN_IDS = [1418891812713795706]
-GAMEPASS_ID = 1536599665
 LOG_CHANNEL_ID = 1428374269179461704  # Replace with your actual channel ID
 
 def load_keys():
@@ -43,7 +44,7 @@ def load_keys():
     with open(KEYS_FILE, "r") as f:
         try:
             return json.load(f)
-        except json.JSONDecodeError:
+        except JSONDecodeError:
             return []
 
 def save_keys(keys):
@@ -56,7 +57,7 @@ def load_redemptions():
     with open(REDEMPTIONS_FILE, "r") as f:
         try:
             return json.load(f)
-        except json.JSONDecodeError:
+        except JSONDecodeError:
             return {}
 
 def save_redemptions(redemptions):
@@ -69,7 +70,7 @@ def load_stock():
     with open(STOCK_FILE, "r") as f:
         try:
             return json.load(f)
-        except json.JSONDecodeError:
+        except JSONDecodeError:
             return []
 
 def save_stock(stock):
@@ -82,19 +83,41 @@ def load_verified_users():
     with open(VERIFIED_USERS_FILE, "r") as f:
         try:
             return json.load(f)
-        except json.JSONDecodeError:
+        except JSONDecodeError:
             return {}
 
 def save_verified_users(verified):
     with open(VERIFIED_USERS_FILE, "w") as f:
         json.dump(verified, f, indent=4)
 
+def load_claimed_users():
+    if not os.path.exists(CLAIMED_USERS_FILE):
+        return {}
+    with open(CLAIMED_USERS_FILE, "r") as f:
+        try:
+            return json.load(f)
+        except JSONDecodeError:
+            return {}
+
+def save_claimed_users(claimed):
+    with open(CLAIMED_USERS_FILE, "w") as f:
+        json.dump(claimed, f, indent=4)
+
+def load_gamepass_pool():
+    if not os.path.exists(GAMEPASS_POOL_FILE):
+        return {"active": [], "used": []}
+    with open(GAMEPASS_POOL_FILE, "r") as f:
+        try:
+            return json.load(f)
+        except JSONDecodeError:
+            return {"active": [], "used": []}
+
+def save_gamepass_pool(pool):
+    with open(GAMEPASS_POOL_FILE, "w") as f:
+        json.dump(pool, f, indent=4)
+
 def is_admin(user_id):
     return user_id in ADMIN_IDS
-
-def has_redeemed_key(user_id):
-    redemptions = load_redemptions()
-    return str(user_id) in redemptions
 
 async def get_roblox_user_id(username: str):
     try:
@@ -137,9 +160,10 @@ async def check_user_owns_gamepass(user_id: str, gamepass_id: int):
         return False
 
 class ValidatePurchaseView(View):
-    def __init__(self, roblox_username: str):
+    def __init__(self, roblox_username: str, gamepass_id: int):
         super().__init__(timeout=180)
         self.roblox_username = roblox_username
+        self.gamepass_id = gamepass_id
 
     @discord.ui.button(label="Validate Purchase", style=discord.ButtonStyle.success, emoji="✅")
     async def validate_purchase(self, interaction: discord.Interaction, button: Button):
@@ -155,11 +179,11 @@ class ValidatePurchaseView(View):
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
-        owns_gamepass = await check_user_owns_gamepass(user_id, GAMEPASS_ID)
+        owns_gamepass = await check_user_owns_gamepass(user_id, self.gamepass_id)
 
         if owns_gamepass:
             stock = load_stock()
-            
+
             if not stock:
                 no_stock_embed = discord.Embed(
                     title="No Stock Available",
@@ -168,10 +192,41 @@ class ValidatePurchaseView(View):
                 )
                 await interaction.followup.send(embed=no_stock_embed, ephemeral=True)
                 return
-            
+
             account = stock.pop(0)
             save_stock(stock)
-            
+
+            # Mark user as claimed
+            claimed_users = load_claimed_users()
+            discord_user_id = str(interaction.user.id)
+            claimed_users[discord_user_id] = {
+                "roblox_username": self.roblox_username,
+                "claimed_at": datetime.now().isoformat(),
+                "gamepass_id": self.gamepass_id
+            }
+            save_claimed_users(claimed_users)
+
+            # Mark gamepass as used
+            gamepass_pool = load_gamepass_pool()
+            if self.gamepass_id in gamepass_pool["active"]:
+                gamepass_pool["active"].remove(self.gamepass_id)
+                gamepass_pool["used"].append(self.gamepass_id)
+                save_gamepass_pool(gamepass_pool)
+
+                # Notify admin if no active gamepasses left
+                if not gamepass_pool["active"]:
+                    for admin_id in ADMIN_IDS:
+                        try:
+                            admin_user = await bot.fetch_user(admin_id)
+                            notify_embed = discord.Embed(
+                                title="⚠️ Restock Needed",
+                                description="all gamepasses used! use /restock to add 3 new ones",
+                                color=0xFF0000
+                            )
+                            await admin_user.send(embed=notify_embed)
+                        except:
+                            pass
+
             try:
                 dm_embed = discord.Embed(
                     title="✅ got ur acc",
@@ -189,7 +244,7 @@ class ValidatePurchaseView(View):
                     color=0x00FF00
                 )
                 await interaction.followup.send(embed=success_embed, ephemeral=True)
-                
+
                 # Log to channel
                 if LOG_CHANNEL_ID:
                     log_channel = bot.get_channel(LOG_CHANNEL_ID)
@@ -206,7 +261,7 @@ class ValidatePurchaseView(View):
             except discord.Forbidden:
                 stock.insert(0, account)
                 save_stock(stock)
-                
+
                 error_embed = discord.Embed(
                     title="cant dm u",
                     description="enable dms and try again",
@@ -328,7 +383,7 @@ async def addstock(interaction: discord.Interaction, username: str, password: st
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
-    
+
     stock = load_stock()
     stock.append({
         "username": username,
@@ -337,7 +392,7 @@ async def addstock(interaction: discord.Interaction, username: str, password: st
         "added_at": datetime.now().isoformat()
     })
     save_stock(stock)
-    
+
     embed = discord.Embed(
         title="Stock Added",
         description=f"Account added to stock!\n**Current Stock:** {len(stock)} accounts",
@@ -346,9 +401,9 @@ async def addstock(interaction: discord.Interaction, username: str, password: st
     )
     embed.add_field(name="Username", value=f"`{username}`", inline=False)
     embed.set_footer(text="Stock updated successfully")
-    
+
     await interaction.response.send_message(embed=embed, ephemeral=True)
-    
+
     # Log to channel
     if LOG_CHANNEL_ID:
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
@@ -368,16 +423,16 @@ async def addstock(interaction: discord.Interaction, username: str, password: st
 async def verify(interaction: discord.Interaction, roblox_username: str):
     verified_users = load_verified_users()
     user_id = str(interaction.user.id)
-    
+
     verification_code = str(uuid.uuid4())[:8].upper()
-    
+
     verified_users[user_id] = {
         "username": roblox_username,
         "code": verification_code,
         "verified": False
     }
     save_verified_users(verified_users)
-    
+
     embed = discord.Embed(
         title="Verify Your Roblox Account",
         description=f"To verify you own the account `{roblox_username}`, follow these steps:",
@@ -394,32 +449,32 @@ async def verify(interaction: discord.Interaction, roblox_username: str):
         inline=False
     )
     embed.set_footer(text="This code expires in 10 minutes")
-    
+
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="confirmverify", description="Confirm your Roblox verification")
 async def confirmverify(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    
+
     verified_users = load_verified_users()
     user_id = str(interaction.user.id)
-    
+
     if user_id not in verified_users or verified_users[user_id].get("verified", False):
         return await interaction.followup.send(
             "You need to start verification with `/verify` first!",
             ephemeral=True
         )
-    
+
     username = verified_users[user_id]["username"]
     code = verified_users[user_id]["code"]
-    
+
     roblox_user_id = await get_roblox_user_id(username)
     if not roblox_user_id:
         return await interaction.followup.send(
             "Could not find that Roblox user. Try `/verify` again.",
             ephemeral=True
         )
-    
+
     try:
         async with aiohttp.ClientSession() as session:
             url = f"https://users.roblox.com/v1/users/{roblox_user_id}"
@@ -427,11 +482,11 @@ async def confirmverify(interaction: discord.Interaction):
                 if resp.status == 200:
                     data = await resp.json()
                     description = data.get("description", "")
-                    
+
                     if code in description:
                         verified_users[user_id]["verified"] = True
                         save_verified_users(verified_users)
-                        
+
                         success_embed = discord.Embed(
                             title="✅ Verified!",
                             description=f"Your Roblox account `{username}` is now verified!",
@@ -455,7 +510,7 @@ async def confirmverify(interaction: discord.Interaction):
 async def buy(interaction: discord.Interaction):
     verified_users = load_verified_users()
     user_id = str(interaction.user.id)
-    
+
     if user_id not in verified_users or not verified_users[user_id].get("verified", False):
         no_verify_embed = discord.Embed(
             title="Not Verified",
@@ -464,31 +519,82 @@ async def buy(interaction: discord.Interaction):
         )
         await interaction.response.send_message(embed=no_verify_embed, ephemeral=True)
         return
-    
+
     roblox_username = verified_users[user_id]["username"]
-    stock = load_stock()
     
-    if not stock:
-        no_stock_embed = discord.Embed(
-            title="No Stock",
-            description="no stock rn!",
+    # Get the next available gamepass from the pool
+    gamepass_pool = load_gamepass_pool()
+    if not gamepass_pool["active"]:
+        no_gamepass_embed = discord.Embed(
+            title="No Gamepasses Available",
+            description="All gamepasses are currently in use. Please try again later or use `/restock` to add more.",
             color=0xFF0000
         )
-        await interaction.response.send_message(embed=no_stock_embed, ephemeral=True)
+        await interaction.response.send_message(embed=no_gamepass_embed, ephemeral=True)
         return
-    
+
+    current_gamepass_id = gamepass_pool["active"][0]
+
     embed = discord.Embed(
         title="purchase",
-        description=f"**Roblox Username:** {roblox_username}\n**Gamepass ID:** {GAMEPASS_ID}\n\nbuy this for lvl 20 rank",
+        description=f"**Roblox Username:** {roblox_username}\n**Gamepass ID:** {current_gamepass_id}\n\nbuy this for lvl 20 rank",
         color=0x0099FF
     )
-    embed.add_field(name="Gamepass Link", value=f"https://www.roblox.com/game-pass/{GAMEPASS_ID}/hi", inline=False)
+    embed.add_field(name="Gamepass Link", value=f"https://www.roblox.com/game-pass/{current_gamepass_id}/hi", inline=False)
 
     await interaction.response.send_message(
         embed=embed, 
-        view=ValidatePurchaseView(roblox_username),
+        view=ValidatePurchaseView(roblox_username, current_gamepass_id),
         ephemeral=True
     )
+
+@bot.tree.command(name="restock", description="Restock gamepasses")
+@app_commands.describe(gp1="First gamepass ID", gp2="Second gamepass ID", gp3="Third gamepass ID")
+async def restock(interaction: discord.Interaction, gp1: int, gp2: int, gp3: int):
+    if not is_admin(interaction.user.id):
+        embed = discord.Embed(
+            title="Permission Denied",
+            description="Only admins can use this command.",
+            color=0xFF0000
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    gamepass_pool = load_gamepass_pool()
+    
+    # Add new gamepasses to the active pool
+    new_gamepasses = [gp1, gp2, gp3]
+    for gp_id in new_gamepasses:
+        if gp_id not in gamepass_pool["active"] and gp_id not in gamepass_pool["used"]:
+            gamepass_pool["active"].append(gp_id)
+    
+    save_gamepass_pool(gamepass_pool)
+
+    embed = discord.Embed(
+        title="Gamepasses Restocked",
+        description=f"Successfully added {len(new_gamepasses)} new gamepasses to the pool.",
+        color=0x00FF00,
+        timestamp=datetime.now()
+    )
+    embed.add_field(name="New Active Gamepasses", value=", ".join(map(str, gamepass_pool["active"])), inline=False)
+    embed.set_footer(text="Gamepass pool updated")
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    # Log to channel
+    if LOG_CHANNEL_ID:
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            log_embed = discord.Embed(
+                title="Gamepasses Restocked",
+                color=0x0099FF,
+                timestamp=datetime.now()
+            )
+            log_embed.add_field(name="Restocked By", value=f"{interaction.user.mention}", inline=False)
+            log_embed.add_field(name="New Gamepasses Added", value=", ".join(map(str, new_gamepasses)), inline=True)
+            log_embed.add_field(name="Total Active Gamepasses", value=f"{len(gamepass_pool['active'])}", inline=True)
+            await log_channel.send(embed=log_embed)
+
 
 if __name__ == "__main__":
     keep_alive()
