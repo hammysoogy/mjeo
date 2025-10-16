@@ -30,6 +30,7 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 
 KEYS_FILE = "keys.json"
 REDEMPTIONS_FILE = "redemptions.json"
+STOCK_FILE = "account_stock.json"
 
 ADMIN_IDS = [1418891812713795706]
 GAMEPASS_ID = 1462417519
@@ -60,6 +61,19 @@ def save_redemptions(redemptions):
     with open(REDEMPTIONS_FILE, "w") as f:
         json.dump(redemptions, f, indent=4)
 
+def load_stock():
+    if not os.path.exists(STOCK_FILE):
+        return []
+    with open(STOCK_FILE, "r") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return []
+
+def save_stock(stock):
+    with open(STOCK_FILE, "w") as f:
+        json.dump(stock, f, indent=4)
+
 def is_admin(user_id):
     return user_id in ADMIN_IDS
 
@@ -76,7 +90,7 @@ async def get_roblox_user_id(username: str):
                 print(f"Roblox API Status: {resp.status}")
                 text = await resp.text()
                 print(f"Roblox API Response: {text}")
-                
+
                 if resp.status == 200:
                     data = await resp.json()
                     if data and data.get("data") and len(data["data"]) > 0:
@@ -96,7 +110,7 @@ async def check_user_owns_gamepass(user_id: str, gamepass_id: int):
                 print(f"Gamepass check status: {resp.status}")
                 text = await resp.text()
                 print(f"Gamepass check response: {text}")
-                
+
                 if resp.status == 200:
                     data = await resp.json()
                     has_gamepass = len(data.get('data', [])) > 0
@@ -111,11 +125,11 @@ class ValidatePurchaseView(View):
     def __init__(self, roblox_username: str):
         super().__init__(timeout=180)
         self.roblox_username = roblox_username
-    
+
     @discord.ui.button(label="Validate Purchase", style=discord.ButtonStyle.success, emoji="✅")
     async def validate_purchase(self, interaction: discord.Interaction, button: Button):
         await interaction.response.defer(ephemeral=True)
-        
+
         user_id = await get_roblox_user_id(self.roblox_username)
         if not user_id:
             embed = discord.Embed(
@@ -125,28 +139,48 @@ class ValidatePurchaseView(View):
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
-        
+
         owns_gamepass = await check_user_owns_gamepass(user_id, GAMEPASS_ID)
-        
+
         if owns_gamepass:
+            stock = load_stock()
+            
+            if not stock:
+                no_stock_embed = discord.Embed(
+                    title="No Stock Available",
+                    description="Sorry, there are no accounts in stock right now. Please contact an admin.",
+                    color=0xFF0000
+                )
+                await interaction.followup.send(embed=no_stock_embed, ephemeral=True)
+                return
+            
+            account = stock.pop(0)
+            save_stock(stock)
+            
             try:
                 dm_embed = discord.Embed(
-                    title="heres ur lvl 20 acc!!!1",
-                    description="wtf",
+                    title="✅ Purchase Successful!",
+                    description="Here's your level 20 account:",
                     color=0x00FF00
                 )
+                dm_embed.add_field(name="Username", value=f"`{account['username']}`", inline=False)
+                dm_embed.add_field(name="Password", value=f"`{account['password']}`", inline=False)
+                dm_embed.set_footer(text="Keep this information safe!")
                 await interaction.user.send(embed=dm_embed)
-                
+
                 success_embed = discord.Embed(
                     title="Success!",
-                    description="Your purchase has been validated! Check your DMs.",
+                    description="Your purchase has been validated! Check your DMs for account details.",
                     color=0x00FF00
                 )
                 await interaction.followup.send(embed=success_embed, ephemeral=True)
             except discord.Forbidden:
+                stock.insert(0, account)
+                save_stock(stock)
+                
                 error_embed = discord.Embed(
                     title="DM Failed",
-                    description="I couldn't send you a DM. Please enable DMs from server members.",
+                    description="I couldn't send you a DM. Please enable DMs from server members and try again.",
                     color=0xFF0000
                 )
                 await interaction.followup.send(embed=error_embed, ephemeral=True)
@@ -161,7 +195,7 @@ class ValidatePurchaseView(View):
 class PanelView(View):
     def __init__(self):
         super().__init__(timeout=None)
-    
+
     @discord.ui.button(label="Check Stock", style=discord.ButtonStyle.primary, emoji="📦")
     async def check_stock(self, interaction: discord.Interaction, button: Button):
         embed = discord.Embed(
@@ -170,7 +204,7 @@ class PanelView(View):
             color=0xFFA500
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
-    
+
     @discord.ui.button(label="Get Role", style=discord.ButtonStyle.primary, emoji="✅")
     async def get_role(self, interaction: discord.Interaction, button: Button):
         if not has_redeemed_key(interaction.user.id):
@@ -181,7 +215,7 @@ class PanelView(View):
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
-        
+
         redemptions = load_redemptions()
         user_data = redemptions.get(str(interaction.user.id))
         if not user_data:
@@ -192,9 +226,9 @@ class PanelView(View):
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
-        
+
         role_id = user_data.get("role_id")
-        
+
         if not role_id:
             embed = discord.Embed(
                 title="Error",
@@ -203,7 +237,7 @@ class PanelView(View):
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
-        
+
         if not interaction.guild:
             embed = discord.Embed(
                 title="Error",
@@ -212,7 +246,7 @@ class PanelView(View):
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
-        
+
         role = interaction.guild.get_role(int(role_id))
         if not role:
             embed = discord.Embed(
@@ -222,7 +256,7 @@ class PanelView(View):
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
-        
+
         if not isinstance(interaction.user, discord.Member):
             embed = discord.Embed(
                 title="Error",
@@ -231,7 +265,7 @@ class PanelView(View):
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
             return
-        
+
         try:
             await interaction.user.add_roles(role)
             embed = discord.Embed(
@@ -264,14 +298,14 @@ async def panel(interaction: discord.Interaction):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
-    
+
     embed = discord.Embed(
         title="Relay Autojoiner | Control Panel",
         description="This control panel is for the project: **Relay-AJ**\nIf you're a buyer, click on the buttons below to redeem your key, get the script or get your role",
         color=0xFFA500
     )
     embed.set_footer(text=f"Sent by {interaction.user.name} • {datetime.now().strftime('%m/%d/%Y %H:%M')}")
-    
+
     await interaction.response.send_message(embed=embed, view=PanelView())
 
 @bot.tree.command(name="genauthkey", description="Generate an authentication key (Admin only)")
@@ -285,7 +319,7 @@ async def genauthkey(interaction: discord.Interaction, role_id: str):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
-    
+
     key = str(uuid.uuid4())
     keys = load_keys()
     keys.append({
@@ -296,7 +330,7 @@ async def genauthkey(interaction: discord.Interaction, role_id: str):
         "redeemed": False
     })
     save_keys(keys)
-    
+
     embed = discord.Embed(
         title="Key Generated",
         description=f"**Key:** `{key}`\n**Role ID:** `{role_id}`",
@@ -304,7 +338,7 @@ async def genauthkey(interaction: discord.Interaction, role_id: str):
         timestamp=datetime.now()
     )
     embed.set_footer(text="Keep this key safe and share it with your buyer")
-    
+
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="redeemkey", description="Redeem an authentication key")
@@ -318,17 +352,17 @@ async def redeemkey(interaction: discord.Interaction, key: str):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
-    
+
     keys = load_keys()
     key_data = None
     key_index = -1
-    
+
     for idx, k in enumerate(keys):
         if k["key"] == key and not k["redeemed"]:
             key_data = k
             key_index = idx
             break
-    
+
     if not key_data or key_index == -1:
         embed = discord.Embed(
             title="Invalid Key",
@@ -337,12 +371,12 @@ async def redeemkey(interaction: discord.Interaction, key: str):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         return
-    
+
     keys[key_index]["redeemed"] = True
     keys[key_index]["redeemed_by"] = str(interaction.user.id)
     keys[key_index]["redeemed_at"] = datetime.now().isoformat()
     save_keys(keys)
-    
+
     redemptions = load_redemptions()
     redemptions[str(interaction.user.id)] = {
         "key": key,
@@ -350,12 +384,44 @@ async def redeemkey(interaction: discord.Interaction, key: str):
         "redeemed_at": datetime.now().isoformat()
     }
     save_redemptions(redemptions)
-    
+
     embed = discord.Embed(
         title="Key Redeemed Successfully",
         description="Your key has been redeemed! You can now use the **Get Role** button in the control panel.",
         color=0x00FF00
     )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="addstock", description="Add an account to stock (Admin only)")
+@app_commands.describe(username="Account username", password="Account password")
+async def addstock(interaction: discord.Interaction, username: str, password: str):
+    if not is_admin(interaction.user.id):
+        embed = discord.Embed(
+            title="Permission Denied",
+            description="Only admins can use this command.",
+            color=0xFF0000
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    
+    stock = load_stock()
+    stock.append({
+        "username": username,
+        "password": password,
+        "added_by": str(interaction.user.id),
+        "added_at": datetime.now().isoformat()
+    })
+    save_stock(stock)
+    
+    embed = discord.Embed(
+        title="Stock Added",
+        description=f"Account added to stock!\n**Current Stock:** {len(stock)} accounts",
+        color=0x00FF00,
+        timestamp=datetime.now()
+    )
+    embed.add_field(name="Username", value=f"`{username}`", inline=False)
+    embed.set_footer(text="Stock updated successfully")
+    
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="buy", description="Buy an item")
@@ -367,7 +433,7 @@ async def buy(interaction: discord.Interaction, roblox_username: str):
         color=0x0099FF
     )
     embed.add_field(name="Gamepass Link", value=f"https://www.roblox.com/game-pass/{GAMEPASS_ID}", inline=False)
-    
+
     await interaction.response.send_message(
         embed=embed, 
         view=ValidatePurchaseView(roblox_username),
