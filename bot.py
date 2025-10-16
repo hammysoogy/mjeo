@@ -34,7 +34,7 @@ STOCK_FILE = "account_stock.json"
 
 ADMIN_IDS = [1418891812713795706]
 GAMEPASS_ID = 1536599665
-LOG_CHANNEL_ID = 1428374269179461704  # Replace with your actual channel ID
+LOG_CHANNEL_ID = 0  # Replace with your actual channel ID
 
 def load_keys():
     if not os.path.exists(KEYS_FILE):
@@ -104,7 +104,7 @@ async def get_roblox_user_id(username: str):
         return None
 
 async def check_user_owns_gamepass(user_id: str, gamepass_id: int):
-    try:.
+    try:
         async with aiohttp.ClientSession() as session:
             url = f"https://inventory.roblox.com/v1/users/{user_id}/items/GamePass/{gamepass_id}"
             async with session.get(url) as resp:
