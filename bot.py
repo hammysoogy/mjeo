@@ -33,7 +33,8 @@ REDEMPTIONS_FILE = "redemptions.json"
 STOCK_FILE = "account_stock.json"
 
 ADMIN_IDS = [1418891812713795706]
-GAMEPASS_ID = 1462417519
+GAMEPASS_ID = 1536599665
+LOG_CHANNEL_ID = 1428374269179461704  # Replace with your actual channel ID
 
 def load_keys():
     if not os.path.exists(KEYS_FILE):
@@ -103,7 +104,7 @@ async def get_roblox_user_id(username: str):
         return None
 
 async def check_user_owns_gamepass(user_id: str, gamepass_id: int):
-    try:
+    try:.
         async with aiohttp.ClientSession() as session:
             url = f"https://inventory.roblox.com/v1/users/{user_id}/items/GamePass/{gamepass_id}"
             async with session.get(url) as resp:
@@ -134,7 +135,7 @@ class ValidatePurchaseView(View):
         if not user_id:
             embed = discord.Embed(
                 title="Error",
-                description="user doesnt exist1!!!!!!11",
+                description="user doesnt exist",
                 color=0xFF0000
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -148,7 +149,7 @@ class ValidatePurchaseView(View):
             if not stock:
                 no_stock_embed = discord.Embed(
                     title="No Stock Available",
-                    description="Sorry, there are no accounts in stock right now. Please contact an admin.",
+                    description="no stock rn!",
                     color=0xFF0000
                 )
                 await interaction.followup.send(embed=no_stock_embed, ephemeral=True)
@@ -159,35 +160,49 @@ class ValidatePurchaseView(View):
             
             try:
                 dm_embed = discord.Embed(
-                    title="✅ Purchase Successful!",
-                    description="Here's your level 20 account:",
+                    title="✅ got ur acc",
+                    description="heres ur lvl 20 acc:",
                     color=0x00FF00
                 )
                 dm_embed.add_field(name="Username", value=f"`{account['username']}`", inline=False)
                 dm_embed.add_field(name="Password", value=f"`{account['password']}`", inline=False)
-                dm_embed.set_footer(text="Keep this information safe!")
+                dm_embed.set_footer(text="keep this safe")
                 await interaction.user.send(embed=dm_embed)
 
                 success_embed = discord.Embed(
-                    title="Success!",
-                    description="Your purchase has been validated! Check your DMs for account details.",
+                    title="validated",
+                    description="check dms for acc info",
                     color=0x00FF00
                 )
                 await interaction.followup.send(embed=success_embed, ephemeral=True)
+                
+                # Log to channel
+                if LOG_CHANNEL_ID:
+                    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+                    if log_channel:
+                        log_embed = discord.Embed(
+                            title="📦 Account Distributed",
+                            color=0x00FF00,
+                            timestamp=datetime.now()
+                        )
+                        log_embed.add_field(name="User", value=f"{interaction.user.mention} ({interaction.user.id})", inline=False)
+                        log_embed.add_field(name="Username", value=f"`{account['username']}`", inline=True)
+                        log_embed.add_field(name="Stock Remaining", value=f"{len(stock)} accounts", inline=True)
+                        await log_channel.send(embed=log_embed)
             except discord.Forbidden:
                 stock.insert(0, account)
                 save_stock(stock)
                 
                 error_embed = discord.Embed(
-                    title="DM Failed",
-                    description="I couldn't send you a DM. Please enable DMs from server members and try again.",
+                    title="cant dm u",
+                    description="enable dms and try again",
                     color=0xFF0000
                 )
                 await interaction.followup.send(embed=error_embed, ephemeral=True)
         else:
             embed = discord.Embed(
-                title="Purchase Failed..",
-                description="SCAMMER",
+                title="failed",
+                description="u didnt buy it",
                 color=0xFF0000
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -423,16 +438,41 @@ async def addstock(interaction: discord.Interaction, username: str, password: st
     embed.set_footer(text="Stock updated successfully")
     
     await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    # Log to channel
+    if LOG_CHANNEL_ID:
+        log_channel = bot.get_channel(LOG_CHANNEL_ID)
+        if log_channel:
+            log_embed = discord.Embed(
+                title="➕ Stock Added",
+                color=0x0099FF,
+                timestamp=datetime.now()
+            )
+            log_embed.add_field(name="Added By", value=f"{interaction.user.mention}", inline=False)
+            log_embed.add_field(name="Username", value=f"`{username}`", inline=True)
+            log_embed.add_field(name="Total Stock", value=f"{len(stock)} accounts", inline=True)
+            await log_channel.send(embed=log_embed)
 
 @bot.tree.command(name="buy", description="Buy an item")
 @app_commands.describe(roblox_username="Your Roblox username")
 async def buy(interaction: discord.Interaction, roblox_username: str):
+    stock = load_stock()
+    
+    if not stock:
+        no_stock_embed = discord.Embed(
+            title="No Stock",
+            description="no stock rn!",
+            color=0xFF0000
+        )
+        await interaction.response.send_message(embed=no_stock_embed, ephemeral=True)
+        return
+    
     embed = discord.Embed(
-        title="pruchase",
-        description=f"**Roblox Username:** {roblox_username}\n**Gamepass ID:** {GAMEPASS_ID}\n\nbuy this tho for uh lvl 20 rank!!!",
+        title="purchase",
+        description=f"**Roblox Username:** {roblox_username}\n**Gamepass ID:** {GAMEPASS_ID}\n\nbuy this for lvl 20 rank",
         color=0x0099FF
     )
-    embed.add_field(name="Gamepass Link", value=f"https://www.roblox.com/game-pass/{GAMEPASS_ID}", inline=False)
+    embed.add_field(name="Gamepass Link", value=f"https://www.roblox.com/game-pass/{GAMEPASS_ID}/hi", inline=False)
 
     await interaction.response.send_message(
         embed=embed, 
