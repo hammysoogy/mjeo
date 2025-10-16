@@ -434,8 +434,8 @@ async def verify(interaction: discord.Interaction, roblox_username: str):
     save_verified_users(verified_users)
 
     embed = discord.Embed(
-        title="Verify Your Roblox Account",
-        description=f"To verify you own the account `{roblox_username}`, follow these steps:",
+        title="very u own the roblox acc",
+        description=f"To verify you own the account `{roblox_username}` so i know your not scamming me, follow these steps:",
         color=0x0099FF
     )
     embed.add_field(
@@ -448,7 +448,7 @@ async def verify(interaction: discord.Interaction, roblox_username: str):
         value="After adding the code, use `/confirmverify` to complete verification.",
         inline=False
     )
-    embed.set_footer(text="This code expires in 10 minutes")
+    embed.set_footer(text="This code expires in 10 btw")
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -488,14 +488,14 @@ async def confirmverify(interaction: discord.Interaction):
                         save_verified_users(verified_users)
 
                         success_embed = discord.Embed(
-                            title="✅ Verified!",
+                            title=Verified!!!11!11!!11!!!1!!1!",
                             description=f"Your Roblox account `{username}` is now verified!",
                             color=0x00FF00
                         )
                         await interaction.followup.send(embed=success_embed, ephemeral=True)
                     else:
                         fail_embed = discord.Embed(
-                            title="❌ Verification Failed",
+                            title="❌",
                             description=f"Code not found in your profile description. Make sure you added:\n```{code}```",
                             color=0xFF0000
                         )
@@ -513,8 +513,8 @@ async def buy(interaction: discord.Interaction):
 
     if user_id not in verified_users or not verified_users[user_id].get("verified", False):
         no_verify_embed = discord.Embed(
-            title="Not Verified",
-            description="You need to verify your Roblox account first!\nUse `/verify <your_roblox_username>` to get started.",
+            title="Not verfieddddd",
+            description="You need to verify your Roblox account first1!1!!!\nUse `/verify <your_roblox_username>` to get started",
             color=0xFF0000
         )
         await interaction.response.send_message(embed=no_verify_embed, ephemeral=True)
@@ -526,8 +526,8 @@ async def buy(interaction: discord.Interaction):
     gamepass_pool = load_gamepass_pool()
     if not gamepass_pool["active"]:
         no_gamepass_embed = discord.Embed(
-            title="No Gamepasses Available",
-            description="All gamepasses are currently in use. Please try again later or use `/restock` to add more.",
+            title="gone",
+            description="out of stock",
             color=0xFF0000
         )
         await interaction.response.send_message(embed=no_gamepass_embed, ephemeral=True)
