@@ -31,6 +31,7 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 KEYS_FILE = "keys.json"
 REDEMPTIONS_FILE = "redemptions.json"
 STOCK_FILE = "account_stock.json"
+VERIFIED_USERS_FILE = "verified_users.json"
 
 ADMIN_IDS = [1418891812713795706]
 GAMEPASS_ID = 1536599665
@@ -74,6 +75,19 @@ def load_stock():
 def save_stock(stock):
     with open(STOCK_FILE, "w") as f:
         json.dump(stock, f, indent=4)
+
+def load_verified_users():
+    if not os.path.exists(VERIFIED_USERS_FILE):
+        return {}
+    with open(VERIFIED_USERS_FILE, "r") as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {}
+
+def save_verified_users(verified):
+    with open(VERIFIED_USERS_FILE, "w") as f:
+        json.dump(verified, f, indent=4)
 
 def is_admin(user_id):
     return user_id in ADMIN_IDS
@@ -349,9 +363,109 @@ async def addstock(interaction: discord.Interaction, username: str, password: st
             log_embed.add_field(name="Total Stock", value=f"{len(stock)} accounts", inline=True)
             await log_channel.send(embed=log_embed)
 
-@bot.tree.command(name="buy", description="Buy an item")
+@bot.tree.command(name="verify", description="Verify your Roblox username")
 @app_commands.describe(roblox_username="Your Roblox username")
-async def buy(interaction: discord.Interaction, roblox_username: str):
+async def verify(interaction: discord.Interaction, roblox_username: str):
+    verified_users = load_verified_users()
+    user_id = str(interaction.user.id)
+    
+    verification_code = str(uuid.uuid4())[:8].upper()
+    
+    verified_users[user_id] = {
+        "username": roblox_username,
+        "code": verification_code,
+        "verified": False
+    }
+    save_verified_users(verified_users)
+    
+    embed = discord.Embed(
+        title="Verify Your Roblox Account",
+        description=f"To verify you own the account `{roblox_username}`, follow these steps:",
+        color=0x0099FF
+    )
+    embed.add_field(
+        name="Step 1",
+        value=f"Go to your Roblox profile and add this code to your About/Description:\n```{verification_code}```",
+        inline=False
+    )
+    embed.add_field(
+        name="Step 2",
+        value="After adding the code, use `/confirmverify` to complete verification.",
+        inline=False
+    )
+    embed.set_footer(text="This code expires in 10 minutes")
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="confirmverify", description="Confirm your Roblox verification")
+async def confirmverify(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    
+    verified_users = load_verified_users()
+    user_id = str(interaction.user.id)
+    
+    if user_id not in verified_users or verified_users[user_id].get("verified", False):
+        return await interaction.followup.send(
+            "You need to start verification with `/verify` first!",
+            ephemeral=True
+        )
+    
+    username = verified_users[user_id]["username"]
+    code = verified_users[user_id]["code"]
+    
+    roblox_user_id = await get_roblox_user_id(username)
+    if not roblox_user_id:
+        return await interaction.followup.send(
+            "Could not find that Roblox user. Try `/verify` again.",
+            ephemeral=True
+        )
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"https://users.roblox.com/v1/users/{roblox_user_id}"
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    description = data.get("description", "")
+                    
+                    if code in description:
+                        verified_users[user_id]["verified"] = True
+                        save_verified_users(verified_users)
+                        
+                        success_embed = discord.Embed(
+                            title="✅ Verified!",
+                            description=f"Your Roblox account `{username}` is now verified!",
+                            color=0x00FF00
+                        )
+                        await interaction.followup.send(embed=success_embed, ephemeral=True)
+                    else:
+                        fail_embed = discord.Embed(
+                            title="❌ Verification Failed",
+                            description=f"Code not found in your profile description. Make sure you added:\n```{code}```",
+                            color=0xFF0000
+                        )
+                        await interaction.followup.send(embed=fail_embed, ephemeral=True)
+                else:
+                    await interaction.followup.send("Error checking Roblox profile.", ephemeral=True)
+    except Exception as e:
+        print(f"Verification error: {e}")
+        await interaction.followup.send("Error during verification.", ephemeral=True)
+
+@bot.tree.command(name="buy", description="Buy an item")
+async def buy(interaction: discord.Interaction):
+    verified_users = load_verified_users()
+    user_id = str(interaction.user.id)
+    
+    if user_id not in verified_users or not verified_users[user_id].get("verified", False):
+        no_verify_embed = discord.Embed(
+            title="Not Verified",
+            description="You need to verify your Roblox account first!\nUse `/verify <your_roblox_username>` to get started.",
+            color=0xFF0000
+        )
+        await interaction.response.send_message(embed=no_verify_embed, ephemeral=True)
+        return
+    
+    roblox_username = verified_users[user_id]["username"]
     stock = load_stock()
     
     if not stock:
