@@ -34,7 +34,7 @@ STOCK_FILE = "account_stock.json"
 
 ADMIN_IDS = [1418891812713795706]
 GAMEPASS_ID = 1536599665
-LOG_CHANNEL_ID = 0  # Replace with your actual channel ID
+LOG_CHANNEL_ID = 1428374269179461704  # Replace with your actual channel ID
 
 def load_keys():
     if not os.path.exists(KEYS_FILE):
@@ -303,111 +303,7 @@ async def on_ready():
     print(f"{bot.user} is ready")
     print(f"Synced commands")
 
-@bot.tree.command(name="panel", description="Display the control panel (Admin only)")
-async def panel(interaction: discord.Interaction):
-    if not is_admin(interaction.user.id):
-        embed = discord.Embed(
-            title="Permission Denied",
-            description="Only admins can use this command.",
-            color=0xFF0000
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    embed = discord.Embed(
-        title="Relay Autojoiner | Control Panel",
-        description="This control panel is for the project: **Relay-AJ**\nIf you're a buyer, click on the buttons below to redeem your key, get the script or get your role",
-        color=0xFFA500
-    )
-    embed.set_footer(text=f"Sent by {interaction.user.name} • {datetime.now().strftime('%m/%d/%Y %H:%M')}")
-
-    await interaction.response.send_message(embed=embed, view=PanelView())
-
-@bot.tree.command(name="genauthkey", description="Generate an authentication key (Admin only)")
-@app_commands.describe(role_id="The role ID to assign when this key is redeemed")
-async def genauthkey(interaction: discord.Interaction, role_id: str):
-    if not is_admin(interaction.user.id):
-        embed = discord.Embed(
-            title="Permission Denied",
-            description="Only admins can use this command.",
-            color=0xFF0000
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    key = str(uuid.uuid4())
-    keys = load_keys()
-    keys.append({
-        "key": key,
-        "role_id": role_id,
-        "generated_by": str(interaction.user.id),
-        "generated_at": datetime.now().isoformat(),
-        "redeemed": False
-    })
-    save_keys(keys)
-
-    embed = discord.Embed(
-        title="Key Generated",
-        description=f"**Key:** `{key}`\n**Role ID:** `{role_id}`",
-        color=0x00FF00,
-        timestamp=datetime.now()
-    )
-    embed.set_footer(text="Keep this key safe and share it with your buyer")
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="redeemkey", description="Redeem an authentication key")
-@app_commands.describe(key="The authentication key to redeem")
-async def redeemkey(interaction: discord.Interaction, key: str):
-    if has_redeemed_key(interaction.user.id):
-        embed = discord.Embed(
-            title="Already Redeemed",
-            description="You have already redeemed a key!",
-            color=0xFF0000
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    keys = load_keys()
-    key_data = None
-    key_index = -1
-
-    for idx, k in enumerate(keys):
-        if k["key"] == key and not k["redeemed"]:
-            key_data = k
-            key_index = idx
-            break
-
-    if not key_data or key_index == -1:
-        embed = discord.Embed(
-            title="Invalid Key",
-            description="This key is invalid or has already been redeemed.",
-            color=0xFF0000
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        return
-
-    keys[key_index]["redeemed"] = True
-    keys[key_index]["redeemed_by"] = str(interaction.user.id)
-    keys[key_index]["redeemed_at"] = datetime.now().isoformat()
-    save_keys(keys)
-
-    redemptions = load_redemptions()
-    redemptions[str(interaction.user.id)] = {
-        "key": key,
-        "role_id": key_data["role_id"],
-        "redeemed_at": datetime.now().isoformat()
-    }
-    save_redemptions(redemptions)
-
-    embed = discord.Embed(
-        title="Key Redeemed Successfully",
-        description="Your key has been redeemed! You can now use the **Get Role** button in the control panel.",
-        color=0x00FF00
-    )
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="addstock", description="Add an account to stock (Admin only)")
+@bot.tree.command(name="addstock", description="hi")
 @app_commands.describe(username="Account username", password="Account password")
 async def addstock(interaction: discord.Interaction, username: str, password: str):
     if not is_admin(interaction.user.id):
