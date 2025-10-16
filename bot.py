@@ -9,6 +9,7 @@ import os
 import json
 import uuid
 import aiohttp
+from json import JSONDecodeError
 
 app = Flask(__name__)
 
@@ -186,8 +187,8 @@ class ValidatePurchaseView(View):
 
             if not stock:
                 no_stock_embed = discord.Embed(
-                    title="No Stock Available",
-                    description="no stock rn!",
+                    title="out of stock",
+                    description="no accounts available rn, check back later",
                     color=0xFF0000
                 )
                 await interaction.followup.send(embed=no_stock_embed, ephemeral=True)
@@ -229,8 +230,8 @@ class ValidatePurchaseView(View):
 
             try:
                 dm_embed = discord.Embed(
-                    title="✅ got ur acc",
-                    description="heres ur lvl 20 acc:",
+                    title="✅ here u go",
+                    description="ur lvl 20 account:",
                     color=0x00FF00
                 )
                 dm_embed.add_field(name="Username", value=f"`{account['username']}`", inline=False)
@@ -434,8 +435,8 @@ async def verify(interaction: discord.Interaction, roblox_username: str):
     save_verified_users(verified_users)
 
     embed = discord.Embed(
-        title="very u own the roblox acc",
-        description=f"To verify you own the account `{roblox_username}` so i know your not scamming me, follow these steps:",
+        title="Verify Your Roblox Account",
+        description=f"To verify you own the account `{roblox_username}`, follow these steps:",
         color=0x0099FF
     )
     embed.add_field(
@@ -448,7 +449,7 @@ async def verify(interaction: discord.Interaction, roblox_username: str):
         value="After adding the code, use `/confirmverify` to complete verification.",
         inline=False
     )
-    embed.set_footer(text="This code expires in 10 btw")
+    embed.set_footer(text="This code expires in 10 minutes")
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -488,14 +489,14 @@ async def confirmverify(interaction: discord.Interaction):
                         save_verified_users(verified_users)
 
                         success_embed = discord.Embed(
-                            title=Verified!!!11!11!!11!!!1!!1!",
+                            title="✅ Verified!",
                             description=f"Your Roblox account `{username}` is now verified!",
                             color=0x00FF00
                         )
                         await interaction.followup.send(embed=success_embed, ephemeral=True)
                     else:
                         fail_embed = discord.Embed(
-                            title="❌",
+                            title="❌ Verification Failed",
                             description=f"Code not found in your profile description. Make sure you added:\n```{code}```",
                             color=0xFF0000
                         )
@@ -513,21 +514,21 @@ async def buy(interaction: discord.Interaction):
 
     if user_id not in verified_users or not verified_users[user_id].get("verified", False):
         no_verify_embed = discord.Embed(
-            title="Not verfieddddd",
-            description="You need to verify your Roblox account first1!1!!!\nUse `/verify <your_roblox_username>` to get started",
+            title="Not Verified",
+            description="You need to verify your Roblox account first!\nUse `/verify <your_roblox_username>` to get started.",
             color=0xFF0000
         )
         await interaction.response.send_message(embed=no_verify_embed, ephemeral=True)
         return
 
     roblox_username = verified_users[user_id]["username"]
-    
+
     # Get the next available gamepass from the pool
     gamepass_pool = load_gamepass_pool()
     if not gamepass_pool["active"]:
         no_gamepass_embed = discord.Embed(
-            title="gone",
-            description="out of stock",
+            title="No Gamepasses Available",
+            description="All gamepasses are currently in use. Please try again later or use `/restock` to add more.",
             color=0xFF0000
         )
         await interaction.response.send_message(embed=no_gamepass_embed, ephemeral=True)
@@ -561,13 +562,13 @@ async def restock(interaction: discord.Interaction, gp1: int, gp2: int, gp3: int
         return
 
     gamepass_pool = load_gamepass_pool()
-    
+
     # Add new gamepasses to the active pool
     new_gamepasses = [gp1, gp2, gp3]
     for gp_id in new_gamepasses:
         if gp_id not in gamepass_pool["active"] and gp_id not in gamepass_pool["used"]:
             gamepass_pool["active"].append(gp_id)
-    
+
     save_gamepass_pool(gamepass_pool)
 
     embed = discord.Embed(
@@ -586,7 +587,7 @@ async def restock(interaction: discord.Interaction, gp1: int, gp2: int, gp3: int
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             log_embed = discord.Embed(
-                title="Gamepasses Restocked",
+                title="🔄 Gamepasses Restocked",
                 color=0x0099FF,
                 timestamp=datetime.now()
             )
